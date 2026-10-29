@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# production
+dist/
+coverage/
+*.tsbuildinfo
+
+# local data and secrets
+.env
+.env.*
+!.env.example
+data/
+uploads/
+*.db
+*.db-shm
+*.db-wal
+
+# logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
