@@ -100,8 +100,8 @@ export async function POST(request: Request) {
             (text) => emit({ event: "delta", data: { text } }),
             request.signal,
           );
-          const completedUsage = generation.commit();
-          const runId = recordRunForViewer(userId, {
+          const completedUsage = await generation.commit();
+          const runId = await recordRunForViewer(userId, {
             kind: "chat",
             modelRef: target.modelRef,
             providerId: target.providerId,
@@ -133,12 +133,12 @@ export async function POST(request: Request) {
             },
           });
         } catch (error) {
-          generation.release();
+          await generation.release();
           const history = providerErrorForHistory(error);
           const { body: errorBody } = publicError(error);
           let runId: string | undefined;
           try {
-            runId = recordRunForViewer(userId, {
+            runId = await recordRunForViewer(userId, {
               kind: "chat",
               modelRef: target.modelRef,
               providerId: target.providerId,

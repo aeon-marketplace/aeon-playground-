@@ -90,9 +90,9 @@ export async function POST(request: Request) {
         512,
         AbortSignal.timeout(TEST_TIMEOUT_MS),
       );
-      dailyUsage = generation.commit();
+      dailyUsage = await generation.commit();
       if (userId) {
-        saveModelTestResult(userId, target.modelRef, {
+        await saveModelTestResult(userId, target.modelRef, {
           status: "success",
           errorCode: null,
           errorMessage: null,
@@ -123,9 +123,9 @@ export async function POST(request: Request) {
       seed: Math.floor(Math.random() * 2_147_483_647),
       signal: AbortSignal.timeout(TEST_TIMEOUT_MS),
     });
-    dailyUsage = generation.commit();
+    dailyUsage = await generation.commit();
     if (userId) {
-      saveModelTestResult(userId, target.modelRef, {
+      await saveModelTestResult(userId, target.modelRef, {
         status: "success",
         errorCode: null,
         errorMessage: null,
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (generation) {
       try {
-        generation.release();
+        await generation.release();
       } catch {
         // Never mask the original error if cleanup also fails.
       }
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
     const history = providerErrorForHistory(error);
     if (userId && modelRef && !rejectedByAllowance) {
       try {
-        saveModelTestResult(userId, modelRef, {
+        await saveModelTestResult(userId, modelRef, {
           status: "error",
           errorCode: history.code,
           errorMessage: history.message,

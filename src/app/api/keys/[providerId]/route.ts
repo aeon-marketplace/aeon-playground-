@@ -29,9 +29,9 @@ export async function DELETE(
         { status: 404 },
       );
     }
-    deleteProviderCredential(userId, providerId);
-    clearModelTestResults(userId, providerId);
-    return NextResponse.json({ ok: true, credentials: listProviderCredentials(userId) });
+    await deleteProviderCredential(userId, providerId);
+    await clearModelTestResults(userId, providerId);
+    return NextResponse.json({ ok: true, credentials: await listProviderCredentials(userId) });
   } catch (error) {
     return jsonError(error);
   }

@@ -29,12 +29,12 @@ export async function DELETE(request: Request) {
     }
     enforceRateLimit(`account-delete:${user.id}`, 3, 10 * 60_000);
     const body = deleteAccountSchema.parse(await readJson(request));
-    const row = findUserById(user.id);
+    const row = await findUserById(user.id);
     if (!row || !(await verifyPassword(body.password, row.password_hash))) {
       throw new ApiError(401, "invalid_credentials", "Password is incorrect.");
     }
-    const images = listImagePaths(user.id);
-    deleteUser(user.id);
+    const images = await listImagePaths(user.id);
+    await deleteUser(user.id);
     await destroyCurrentSession();
     await clearAnonymousSessionCookie();
     await Promise.all(images.map((imagePath) => deleteStoredImage(imagePath)));

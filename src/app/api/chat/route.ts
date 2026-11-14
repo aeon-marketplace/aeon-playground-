@@ -60,8 +60,8 @@ export async function POST(request: Request) {
         body.maxTokens,
         request.signal,
       );
-      dailyUsage = generation.commit();
-      const runId = recordRunForViewer(userId, {
+      dailyUsage = await generation.commit();
+      const runId = await recordRunForViewer(userId, {
         kind: "chat",
         modelRef: target.modelRef,
         providerId: target.providerId,
@@ -98,10 +98,10 @@ export async function POST(request: Request) {
         dailyUsage,
       });
     } catch (error) {
-      generation.release();
+      await generation.release();
       dailyUsage = generation.usage;
       const history = providerErrorForHistory(error);
-      const runId = recordRunForViewer(userId, {
+      const runId = await recordRunForViewer(userId, {
         kind: "chat",
         modelRef: target.modelRef,
         providerId: target.providerId,
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (generation) {
       try {
-        generation.release();
+        await generation.release();
       } catch {
         // Never mask the original error if cleanup also fails.
       }
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     if (userId && !isAnonymousUserId(userId) && !rejectedByAllowance) {
       const history = providerErrorForHistory(error);
       try {
-        recordRun({
+        await recordRun({
           userId,
           kind: "chat",
           modelRef: modelRef || "unknown",

@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     if (activeTargets.length === 0) {
       return NextResponse.json({
         groupId,
-        results: resolved.map((entry) => resolutionFailure(userId, groupId, body, entry)),
+        results: await Promise.all(resolved.map((entry) => resolutionFailure(userId, groupId, body, entry))),
       });
     }
 
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
             body.temperature,
             body.maxTokens,
           );
-          const runId = recordRunForViewer(userId, {
+          const runId = await recordRunForViewer(userId, {
             kind: "compare",
             groupId,
             modelRef: target.modelRef,
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
         } catch (error) {
           const history = providerErrorForHistory(error);
           const { body: errorBody } = publicError(error);
-          const runId = recordRunForViewer(userId, {
+          const runId = await recordRunForViewer(userId, {
             kind: "compare",
             groupId,
             modelRef: target.modelRef,
@@ -163,14 +163,14 @@ export async function POST(request: Request) {
     return NextResponse.json({
       groupId,
       results,
-      dailyUsage: generation.commit(
+      dailyUsage: await generation.commit(
         results.filter((result) => result.status === "success").length,
       ),
     });
   } catch (error) {
     if (generation) {
       try {
-        generation.release();
+        await generation.release();
       } catch {
         // Never mask the original error if cleanup also fails.
       }
@@ -179,7 +179,7 @@ export async function POST(request: Request) {
   }
 }
 
-function resolutionFailure(
+async function resolutionFailure(
   userId: string | null,
   groupId: string,
   body: { prompt: string; systemPrompt: string },
@@ -191,7 +191,7 @@ function resolutionFailure(
     message: errorBody.error.message,
     details: errorBody.error.details,
   };
-  recordRunForViewer(userId, {
+  await recordRunForViewer(userId, {
     kind: "compare",
     groupId,
     modelRef: entry.ref,

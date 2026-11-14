@@ -42,9 +42,9 @@ export default async function PlaygroundPage({
     getPlaygroundModels(user?.id ?? null, "image"),
   ]);
 
-  const dailyUsage = usageUserId ? getDailyUsage(usageUserId) : fullDailyUsage();
+  const dailyUsage = usageUserId ? await getDailyUsage(usageUserId) : fullDailyUsage();
   const settings = user
-    ? getSettings(user.id)
+    ? await getSettings(user.id)
     : { defaultModelRef: null, defaultSystemPrompt: "", updatedAt: 0 };
 
   const requestedText = requestedRef
@@ -103,7 +103,7 @@ export default async function PlaygroundPage({
   const defaultImageRef = requestedImage ?? imageModels[0]?.ref ?? null;
 
   const initialImages: ImageRecord[] = account
-    ? listRuns(account.id, 200)
+    ? (await listRuns(account.id, 200))
         .filter((run) => run.kind === "image" && run.imagePath)
         .slice(0, 12)
         .map((run) => ({

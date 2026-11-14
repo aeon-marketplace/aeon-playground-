@@ -28,7 +28,7 @@ export async function GET() {
   try {
     const user = await getCurrentUser();
     const userId = user?.id ?? (await getAnonymousUserId());
-    return NextResponse.json({ models: userId ? listCustomModels(userId) : [] });
+    return NextResponse.json({ models: userId ? await listCustomModels(userId) : [] });
   } catch (error) {
     return jsonError(error);
   }
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const user = await getCurrentUser();
     const userId = user?.id ?? (await getOrCreateAnonymousUserId());
     enforceRateLimit(`custom-create:${userId}`, 10, 60_000);
-    const id = createCustomModel(userId, {
+    const id = await createCustomModel(userId, {
       name: body.name,
       baseUrl,
       modelId: body.modelId,
@@ -59,13 +59,13 @@ export async function POST(request: Request) {
         modelId: body.modelId,
         apiKey: body.apiKey || undefined,
       });
-      setCustomModelVerification(userId, id, { verified: true, error: null });
+      await setCustomModelVerification(userId, id, { verified: true, error: null });
     } catch (error) {
       verificationError = safeVerificationError(error);
-      setCustomModelVerification(userId, id, { verified: false, error: verificationError });
+      await setCustomModelVerification(userId, id, { verified: false, error: verificationError });
     }
 
-    const row = getCustomModelRow(userId, id);
+    const row = await getCustomModelRow(userId, id);
     if (!row) {
       return NextResponse.json(
         { error: { code: "internal_error", message: "Custom model could not be saved." } },

@@ -18,7 +18,7 @@ export default async function ProvidersPage() {
   const isOperator = Boolean(user && !user.isAnonymous);
 
   const catalog = await getRuntimeCatalog(user?.id ?? null);
-  const credentials = user ? listProviderCredentials(user.id) : [];
+  const credentials = user ? await listProviderCredentials(user.id) : [];
   const ollama = isOperator ? await getOllamaDiscovery() : null;
 
   const providers: ProviderCardData[] = PROVIDERS.map((provider) => {

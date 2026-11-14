@@ -16,7 +16,7 @@ export async function GET(
     );
   }
   const { id } = await context.params;
-  const run = getRun(user.id, id);
+  const run = await getRun(user.id, id);
   if (!run || run.kind !== "image" || !run.imagePath) {
     return Response.json(
       { error: { code: "not_found", message: "Image not found." } },
@@ -26,11 +26,11 @@ export async function GET(
   const stored = await readStoredImage(run.imagePath);
   if (!stored) {
     return Response.json(
-      { error: { code: "not_found", message: "Image file not found." } },
+      { error: { code: "not_found", message: "Image not found." } },
       { status: 404 },
     );
   }
-  return new Response(stored.bytes as unknown as BodyInit, {
+  return new Response(stored.stream, {
     headers: {
       "content-type": stored.contentType,
       "cache-control": "private, max-age=3600",

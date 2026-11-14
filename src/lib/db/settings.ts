@@ -8,29 +8,29 @@ export type UserSettings = {
   updatedAt: number;
 };
 
-export function getSettings(userId: string): UserSettings {
+export async function getSettings(userId: string): Promise<UserSettings> {
   const db = getDb();
   try {
-    ensureUserExists(userId);
+    await ensureUserExists(userId);
   } catch {
     // best effort
   }
-  let row = db
-    .prepare("SELECT * FROM user_settings WHERE user_id = ?")
-    .get(userId) as UserSettingsRow | undefined;
+  const result = await db.query("SELECT * FROM user_settings WHERE user_id = $1", [userId]);
+  let row = result.rows[0] as UserSettingsRow | undefined;
   if (!row) {
     const now = Date.now();
     try {
-      db.prepare(
-        "INSERT INTO user_settings (user_id, default_model_ref, default_system_prompt, updated_at) VALUES (?, NULL, '', ?)",
-      ).run(userId, now);
+      await db.query(
+        "INSERT INTO user_settings (user_id, default_model_ref, default_system_prompt, updated_at) VALUES ($1, NULL, '', $2)",
+        [userId, now],
+      );
     } catch {
-      // If FK still fails, ensure user and retry once
       try {
-        ensureUserExists(userId);
-        db.prepare(
-          "INSERT INTO user_settings (user_id, default_model_ref, default_system_prompt, updated_at) VALUES (?, NULL, '', ?)",
-        ).run(userId, now);
+        await ensureUserExists(userId);
+        await db.query(
+          "INSERT INTO user_settings (user_id, default_model_ref, default_system_prompt, updated_at) VALUES ($1, NULL, '', $2)",
+          [userId, now],
+        );
       } catch {
         // ignore
       }
@@ -45,25 +45,24 @@ export function getSettings(userId: string): UserSettings {
   return {
     defaultModelRef: row.default_model_ref,
     defaultSystemPrompt: row.default_system_prompt,
-    updatedAt: row.updated_at,
+    updatedAt: Number(row.updated_at),
   };
 }
 
-export function updateSettings(
+export async function updateSettings(
   userId: string,
   input: { defaultModelRef?: string | null; defaultSystemPrompt?: string },
-): UserSettings {
-  const current = getSettings(userId);
+): Promise<UserSettings> {
+  const current = await getSettings(userId);
   const defaultModelRef =
     input.defaultModelRef === undefined ? current.defaultModelRef : input.defaultModelRef;
   const defaultSystemPrompt =
     input.defaultSystemPrompt === undefined
       ? current.defaultSystemPrompt
       : input.defaultSystemPrompt;
-  getDb()
-    .prepare(
-      "UPDATE user_settings SET default_model_ref = ?, default_system_prompt = ?, updated_at = ? WHERE user_id = ?",
-    )
-    .run(defaultModelRef, defaultSystemPrompt, Date.now(), userId);
-  return getSettings(userId);
+  await getDb().query(
+    "UPDATE user_settings SET default_model_ref = $1, default_system_prompt = $2, updated_at = $3 WHERE user_id = $4",
+    [defaultModelRef, defaultSystemPrompt, Date.now(), userId],
+  );
+  return await getSettings(userId);
 }

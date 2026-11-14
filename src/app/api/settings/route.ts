@@ -26,7 +26,7 @@ export async function GET() {
         settings: { defaultModelRef: null, defaultSystemPrompt: "", updatedAt: 0 },
       });
     }
-    return NextResponse.json({ settings: getSettings(userId) });
+    return NextResponse.json({ settings: await getSettings(userId) });
   } catch (error) {
     return jsonError(error);
   }
@@ -60,7 +60,7 @@ export async function PATCH(request: Request) {
         );
       }
     }
-    const settings = updateSettings(userId, {
+    const settings = await updateSettings(userId, {
       defaultModelRef: body.defaultModelRef,
       defaultSystemPrompt: body.defaultSystemPrompt,
     });

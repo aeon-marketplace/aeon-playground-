@@ -28,7 +28,7 @@ export async function DELETE(
     assertSameOrigin(request);
     const user = await requireApiUser();
     const { id } = await context.params;
-    const deleted = deleteCustomModel(user.id, id);
+    const deleted = await deleteCustomModel(user.id, id);
     if (!deleted) {
       return NextResponse.json(
         { error: { code: "not_found", message: "Custom model not found." } },
@@ -50,7 +50,7 @@ export async function PATCH(
     const user = await requireApiUser();
     enforceRateLimit(`custom-edit:${user.id}`, 10, 60_000);
     const { id } = await context.params;
-    const existing = getCustomModelRow(user.id, id);
+    const existing = await getCustomModelRow(user.id, id);
     if (!existing) {
       return NextResponse.json(
         { error: { code: "not_found", message: "Custom model not found." } },
@@ -59,7 +59,7 @@ export async function PATCH(
     }
     const body = customModelUpdateSchema.parse(await readJson(request));
     const baseUrl = await validateCustomBaseUrl(body.baseUrl);
-    const updated = updateCustomModel(user.id, id, {
+    const updated = await updateCustomModel(user.id, id, {
       name: body.name,
       baseUrl,
       modelId: body.modelId,
@@ -75,7 +75,7 @@ export async function PATCH(
 
     let verificationError: string | null = null;
     try {
-      const row = getCustomModelRow(user.id, id);
+      const row = await getCustomModelRow(user.id, id);
       if (!row) {
         return NextResponse.json(
           { error: { code: "internal_error", message: "Custom model could not be reloaded." } },
@@ -85,15 +85,15 @@ export async function PATCH(
       await verifyCustomEndpoint({
         baseUrl,
         modelId: body.modelId,
-        apiKey: decryptCustomKey(row),
+        apiKey: await decryptCustomKey(row),
       });
-      setCustomModelVerification(user.id, id, { verified: true, error: null });
+      await setCustomModelVerification(user.id, id, { verified: true, error: null });
     } catch (error) {
       verificationError = safeVerificationError(error);
-      setCustomModelVerification(user.id, id, { verified: false, error: verificationError });
+      await setCustomModelVerification(user.id, id, { verified: false, error: verificationError });
     }
 
-    const row = getCustomModelRow(user.id, id);
+    const row = await getCustomModelRow(user.id, id);
     return NextResponse.json({
       ok: true,
       model: row ? toPublicCustomModel(row) : null,
@@ -118,7 +118,7 @@ export async function POST(
     const user = await requireApiUser();
     enforceRateLimit(`custom-verify:${user.id}`, 10, 60_000);
     const { id } = await context.params;
-    const row = getCustomModelRow(user.id, id);
+    const row = await getCustomModelRow(user.id, id);
     if (!row) {
       return NextResponse.json(
         { error: { code: "not_found", message: "Custom model not found." } },
@@ -130,17 +130,17 @@ export async function POST(
       await verifyCustomEndpoint({
         baseUrl,
         modelId: row.model_id,
-        apiKey: decryptCustomKey(row),
+        apiKey: await decryptCustomKey(row),
       });
-      setCustomModelVerification(user.id, id, { verified: true, error: null });
-      const updated = getCustomModelRow(user.id, id);
+      await setCustomModelVerification(user.id, id, { verified: true, error: null });
+      const updated = await getCustomModelRow(user.id, id);
       return NextResponse.json({
         ok: true,
         model: updated ? toPublicCustomModel(updated) : null,
       });
     } catch (error) {
       const message = safeVerificationError(error);
-      setCustomModelVerification(user.id, id, { verified: false, error: message });
+      await setCustomModelVerification(user.id, id, { verified: false, error: message });
       return NextResponse.json(
         { error: { code: "verification_failed", message } },
         { status: 422 },

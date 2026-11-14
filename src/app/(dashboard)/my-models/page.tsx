@@ -12,7 +12,7 @@ export default async function MyModelsPage() {
   const user = await getCurrentUser();
   const userId = user?.id ?? (await getAnonymousUserId());
 
-  const models = userId ? listCustomModels(userId) : [];
+  const models = userId ? await listCustomModels(userId) : [];
 
   return (
     <div className="space-y-6">

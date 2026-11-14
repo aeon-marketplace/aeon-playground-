@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       );
     }
     enforceRateLimit(`key-verify:${userId}`, 10, 60_000);
-    const row = getProviderCredentialRow(userId, providerId);
+    const row = await getProviderCredentialRow(userId, providerId);
     if (!row) {
       return NextResponse.json(
         { error: { code: "key_missing", message: "No saved key for this provider." } },
@@ -42,12 +42,12 @@ export async function POST(request: Request) {
     const apiKey = decryptProviderKey(row);
     try {
       const verification = await verifyProviderKey(providerId, apiKey);
-      setProviderVerification(userId, providerId, {
+      await setProviderVerification(userId, providerId, {
         verified: true,
         models: verification.models,
         error: null,
       });
-      clearModelTestResults(userId, providerId);
+      await clearModelTestResults(userId, providerId);
       return NextResponse.json({
         ok: true,
         verifiedModels: verification.models,
@@ -55,12 +55,12 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       const message = safeVerificationError(error);
-      setProviderVerification(userId, providerId, {
+      await setProviderVerification(userId, providerId, {
         verified: false,
         models: [],
         error: message,
       });
-      clearModelTestResults(userId, providerId);
+      await clearModelTestResults(userId, providerId);
       if (error instanceof ProviderError) {
         return NextResponse.json(
           { error: { code: `provider_${error.code}`, message, details: error.details } },

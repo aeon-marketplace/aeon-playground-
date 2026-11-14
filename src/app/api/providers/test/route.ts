@@ -119,7 +119,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const row = getProviderCredentialRow(user.id, provider.id);
+    const row = await getProviderCredentialRow(user.id, provider.id);
     if (!row) {
       return NextResponse.json(
         {
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
     try {
       const apiKey = decryptProviderKey(row);
       const verification = await verifyProviderKey(provider.id, apiKey);
-      setProviderVerification(user.id, provider.id, {
+      await setProviderVerification(user.id, provider.id, {
         verified: true,
         models: verification.models,
         error: null,
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       const message = safeVerificationError(error);
-      setProviderVerification(user.id, provider.id, {
+      await setProviderVerification(user.id, provider.id, {
         verified: false,
         models: [],
         error: message,

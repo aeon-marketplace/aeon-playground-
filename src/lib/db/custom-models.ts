@@ -48,31 +48,34 @@ export function toPublicCustomModel(row: CustomModelRow): PublicCustomModel {
     keyHint: row.key_hint,
     capabilities: parseCapabilities(row.capabilities),
     verified: row.verified === 1,
-    verifiedAt: row.verified_at,
+    verifiedAt: row.verified_at === null ? null : Number(row.verified_at),
     verificationError: row.verification_error,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
   };
 }
 
-export function listCustomModels(userId: string): PublicCustomModel[] {
-  const rows = getDb()
-    .prepare("SELECT * FROM custom_models WHERE user_id = ? ORDER BY created_at DESC")
-    .all(userId) as unknown as CustomModelRow[];
-  return rows.map(toPublicCustomModel);
+export async function listCustomModels(userId: string): Promise<PublicCustomModel[]> {
+  const result = await getDb().query(
+    "SELECT * FROM custom_models WHERE user_id = $1 ORDER BY created_at DESC",
+    [userId],
+  );
+  return (result.rows as unknown as CustomModelRow[]).map(toPublicCustomModel);
 }
 
-export function listVerifiedCustomModels(userId: string): PublicCustomModel[] {
-  return listCustomModels(userId).filter((model) => model.verified);
+export async function listVerifiedCustomModels(userId: string): Promise<PublicCustomModel[]> {
+  return (await listCustomModels(userId)).filter((model) => model.verified);
 }
 
-export function getCustomModelRow(userId: string, id: string): CustomModelRow | undefined {
-  return getDb()
-    .prepare("SELECT * FROM custom_models WHERE user_id = ? AND id = ?")
-    .get(userId, id) as CustomModelRow | undefined;
+export async function getCustomModelRow(userId: string, id: string): Promise<CustomModelRow | undefined> {
+  const result = await getDb().query("SELECT * FROM custom_models WHERE user_id = $1 AND id = $2", [
+    userId,
+    id,
+  ]);
+  return result.rows[0] as CustomModelRow | undefined;
 }
 
-export function createCustomModel(userId: string, input: CustomModelInput): string {
+export async function createCustomModel(userId: string, input: CustomModelInput): Promise<string> {
   const db = getDb();
   const id = randomUUID();
   const now = Date.now();
@@ -89,33 +92,21 @@ export function createCustomModel(userId: string, input: CustomModelInput): stri
     tag = encrypted.tag;
     keyHint = `••••${key.slice(-4)}`;
   }
-  db.prepare(
+  await db.query(
     `INSERT INTO custom_models
       (id, user_id, name, base_url, model_id, ciphertext, iv, tag, key_hint, capabilities, verified, verified_at, verification_error, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, ?, ?)`,
-  ).run(
-    id,
-    userId,
-    input.name,
-    baseUrl,
-    input.modelId,
-    ciphertext,
-    iv,
-    tag,
-    keyHint,
-    JSON.stringify(["text"]),
-    now,
-    now,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, NULL, NULL, $11, $12)`,
+    [id, userId, input.name, baseUrl, input.modelId, ciphertext, iv, tag, keyHint, JSON.stringify(["text"]), now, now],
   );
   return id;
 }
 
-export function updateCustomModel(
+export async function updateCustomModel(
   userId: string,
   id: string,
   input: CustomModelUpdateInput,
-): boolean {
-  const existing = getCustomModelRow(userId, id);
+): Promise<boolean> {
+  const existing = await getCustomModelRow(userId, id);
   if (!existing) return false;
 
   const now = Date.now();
@@ -126,78 +117,58 @@ export function updateCustomModel(
 
   if (replaceKey && newKey) {
     const encrypted = encryptSecret(newKey, secretAad(userId, "custom", id));
-    getDb()
-      .prepare(
-        `UPDATE custom_models
-            SET name = ?, base_url = ?, model_id = ?, ciphertext = ?, iv = ?, tag = ?,
-                key_hint = ?, verified = 0, verified_at = NULL, verification_error = NULL,
-                updated_at = ?
-          WHERE user_id = ? AND id = ?`,
-      )
-      .run(
-        input.name,
-        baseUrl,
-        input.modelId,
-        encrypted.ciphertext,
-        encrypted.iv,
-        encrypted.tag,
-        `••••${newKey.slice(-4)}`,
-        now,
-        userId,
-        id,
-      );
+    await getDb().query(
+      `UPDATE custom_models
+          SET name = $1, base_url = $2, model_id = $3, ciphertext = $4, iv = $5, tag = $6,
+              key_hint = $7, verified = 0, verified_at = NULL, verification_error = NULL,
+              updated_at = $8
+        WHERE user_id = $9 AND id = $10`,
+      [input.name, baseUrl, input.modelId, encrypted.ciphertext, encrypted.iv, encrypted.tag, `••••${newKey.slice(-4)}`, now, userId, id],
+    );
     return true;
   }
 
   if (clearKey) {
-    getDb()
-      .prepare(
-        `UPDATE custom_models
-            SET name = ?, base_url = ?, model_id = ?, ciphertext = NULL, iv = NULL, tag = NULL,
-                key_hint = NULL, verified = 0, verified_at = NULL, verification_error = NULL,
-                updated_at = ?
-          WHERE user_id = ? AND id = ?`,
-      )
-      .run(input.name, baseUrl, input.modelId, now, userId, id);
+    await getDb().query(
+      `UPDATE custom_models
+          SET name = $1, base_url = $2, model_id = $3, ciphertext = NULL, iv = NULL, tag = NULL,
+              key_hint = NULL, verified = 0, verified_at = NULL, verification_error = NULL,
+              updated_at = $4
+        WHERE user_id = $5 AND id = $6`,
+      [input.name, baseUrl, input.modelId, now, userId, id],
+    );
     return true;
   }
 
-  getDb()
-    .prepare(
-      `UPDATE custom_models
-          SET name = ?, base_url = ?, model_id = ?, verified = 0, verified_at = NULL,
-              verification_error = NULL, updated_at = ?
-        WHERE user_id = ? AND id = ?`,
-    )
-    .run(input.name, baseUrl, input.modelId, now, userId, id);
+  await getDb().query(
+    `UPDATE custom_models
+        SET name = $1, base_url = $2, model_id = $3, verified = 0, verified_at = NULL,
+            verification_error = NULL, updated_at = $4
+      WHERE user_id = $5 AND id = $6`,
+    [input.name, baseUrl, input.modelId, now, userId, id],
+  );
   return true;
 }
 
-export function setCustomModelVerification(
+export async function setCustomModelVerification(
   userId: string,
   id: string,
   verification: { verified: boolean; error: string | null },
-): void {
-  getDb()
-    .prepare(
-      `UPDATE custom_models SET verified = ?, verified_at = ?, verification_error = ?, updated_at = ?
-       WHERE user_id = ? AND id = ?`,
-    )
-    .run(
-      verification.verified ? 1 : 0,
-      verification.verified ? Date.now() : null,
-      verification.error,
-      Date.now(),
-      userId,
-      id,
-    );
+): Promise<void> {
+  const now = Date.now();
+  await getDb().query(
+    `UPDATE custom_models SET verified = $1, verified_at = $2, verification_error = $3, updated_at = $4
+     WHERE user_id = $5 AND id = $6`,
+    [verification.verified ? 1 : 0, verification.verified ? now : null, verification.error, now, userId, id],
+  );
 }
 
-export function deleteCustomModel(userId: string, id: string): boolean {
-  const result = getDb()
-    .prepare("DELETE FROM custom_models WHERE user_id = ? AND id = ?")
-    .run(userId, id);
-  return result.changes > 0;
+export async function deleteCustomModel(userId: string, id: string): Promise<boolean> {
+  const result = await getDb().query("DELETE FROM custom_models WHERE user_id = $1 AND id = $2", [
+    userId,
+    id,
+  ]);
+  return result.rowCount > 0;
 }
 
 export function decryptCustomKey(row: CustomModelRow): string | undefined {

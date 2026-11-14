@@ -14,7 +14,7 @@ export async function DELETE(
     const user = await requireApiUser();
     enforceRateLimit(`history-delete:${user.id}`, 30, 60_000);
     const { id } = await context.params;
-    const result = deleteRun(user.id, id);
+    const result = await deleteRun(user.id, id);
     if (!result.deleted) {
       return NextResponse.json(
         { error: { code: "not_found", message: "Test run not found." } },

@@ -15,7 +15,7 @@ export default async function SettingsPage() {
 
   const env = getEnv();
   const settings = user
-    ? getSettings(user.id)
+    ? await getSettings(user.id)
     : { defaultModelRef: null, defaultSystemPrompt: "", updatedAt: 0 };
   const models = (await getSelectableModels(user?.id ?? null)).filter((model) =>
     model.capabilities.includes("text"),

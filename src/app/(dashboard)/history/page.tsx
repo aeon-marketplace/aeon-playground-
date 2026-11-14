@@ -12,8 +12,8 @@ export default async function HistoryPage() {
   const user = await getCurrentUser();
   // Anonymous visitor runs are kept in browser storage, never in SQLite.
   const account = user && !user.isAnonymous ? user : null;
-  const runs = account ? listRuns(account.id, 200) : [];
-  const total = account ? countRuns(account.id) : 0;
+  const runs = account ? await listRuns(account.id, 200) : [];
+  const total = account ? await countRuns(account.id) : 0;
 
   return (
     <div className="space-y-6">

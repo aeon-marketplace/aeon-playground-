@@ -19,8 +19,8 @@ export async function GET(request: Request) {
       limit: url.searchParams.get("limit") ?? undefined,
     });
     return NextResponse.json({
-      runs: listRuns(user.id, parsed.limit),
-      total: countRuns(user.id),
+      runs: await listRuns(user.id, parsed.limit),
+      total: await countRuns(user.id),
     });
   } catch (error) {
     return jsonError(error);
@@ -32,8 +32,8 @@ export async function DELETE(request: Request) {
     assertSameOrigin(request);
     const user = await requireApiUser();
     enforceRateLimit(`history-clear:${user.id}`, 5, 60_000);
-    const imagePaths = listImagePaths(user.id);
-    const deleted = clearHistory(user.id);
+    const imagePaths = await listImagePaths(user.id);
+    const deleted = await clearHistory(user.id);
     await Promise.all(imagePaths.map((imagePath) => deleteStoredImage(imagePath)));
     return NextResponse.json({ ok: true, deleted });
   } catch (error) {

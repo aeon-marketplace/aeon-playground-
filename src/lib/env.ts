@@ -1,5 +1,3 @@
-import path from "node:path";
-
 export class EnvError extends Error {
   constructor(message: string) {
     super(message);
@@ -11,7 +9,7 @@ export type AppEnv = {
   appUrl: string;
   authSecret: string;
   encryptionKey: string;
-  databasePath: string;
+  databaseUrl: string | null;
   allowRegistration: boolean;
   allowInsecureLocalEndpoints: boolean;
   allowPaidByok: boolean;
@@ -127,14 +125,13 @@ export function getEnv(): AppEnv {
     );
   }
 
+  const databaseUrl = (process.env.DATABASE_URL ?? "").trim() || null;
+
   return {
     appUrl: appUrl.origin,
     authSecret,
     encryptionKey,
-    databasePath: path.resolve(
-      /* turbopackIgnore: true */ process.cwd(),
-      process.env.DATABASE_PATH || "./data/playground.db",
-    ),
+    databaseUrl,
     allowRegistration: bool(process.env.ALLOW_REGISTRATION, true),
     allowInsecureLocalEndpoints: bool(process.env.ALLOW_INSECURE_LOCAL_ENDPOINTS, false),
     allowPaidByok: bool(process.env.ALLOW_PAID_BYOK, false),

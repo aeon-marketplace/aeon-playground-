@@ -73,8 +73,8 @@ export async function POST(request: Request) {
         signal: request.signal,
       });
       const filename = persist ? await saveImage(image.bytes, image.contentType) : null;
-      dailyUsage = generation.commit();
-      const runId = recordRunForViewer(userId, {
+      dailyUsage = await generation.commit();
+      const runId = await recordRunForViewer(userId, {
         kind: "image",
         modelRef: target.modelRef,
         providerId: target.providerId,
@@ -103,10 +103,10 @@ export async function POST(request: Request) {
         dailyUsage,
       });
     } catch (error) {
-      generation.release();
+      await generation.release();
       dailyUsage = generation.usage;
       const history = providerErrorForHistory(error);
-      const runId = recordRunForViewer(userId, {
+      const runId = await recordRunForViewer(userId, {
         kind: "image",
         modelRef: target.modelRef,
         providerId: target.providerId,
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (generation) {
       try {
-        generation.release();
+        await generation.release();
       } catch {
         // Never mask the original error if cleanup also fails.
       }

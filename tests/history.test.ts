@@ -1,11 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-
-// Point the SQLite layer at a throwaway file before any getDb() call.
-const tempDirectory = mkdtempSync(path.join(tmpdir(), "fap-history-"));
-process.env.DATABASE_PATH = path.join(tempDirectory, "history.db");
 
 import { closeDbForTests, getDb } from "@/lib/db";
 import {
@@ -17,25 +10,27 @@ import {
   recordRun,
 } from "@/lib/db/runs";
 
-function createUser(id: string, email: string) {
-  getDb()
-    .prepare("INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)")
-    .run(id, email, "not-a-real-hash", Date.now());
+async function createUser(id: string, email: string) {
+  await getDb().query("INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)", [
+    id,
+    email,
+    "not-a-real-hash",
+    Date.now(),
+  ]);
 }
 
 describe("test history authorization and metadata", () => {
-  beforeAll(() => {
-    createUser("user-a", "a@example.test");
-    createUser("user-b", "b@example.test");
+  beforeAll(async () => {
+    await createUser("user-a", "a@example.test");
+    await createUser("user-b", "b@example.test");
   });
 
-  afterAll(() => {
-    closeDbForTests();
-    rmSync(tempDirectory, { recursive: true, force: true });
+  afterAll(async () => {
+    await closeDbForTests();
   });
 
-  it("stores access category and provider/model metadata at test time", () => {
-    const runId = recordRun({
+  it("stores access category and provider/model metadata at test time", async () => {
+    const runId = await recordRun({
       userId: "user-a",
       kind: "chat",
       modelRef: "pollinations::openai-fast",
@@ -55,7 +50,7 @@ describe("test history authorization and metadata", () => {
       systemPrompt: "Be brief.",
     });
 
-    const run = getRun("user-a", runId);
+    const run = await getRun("user-a", runId);
     expect(run).toMatchObject({
       accessType: "limited-free",
       providerName: "Pollinations",
@@ -66,8 +61,8 @@ describe("test history authorization and metadata", () => {
     });
   });
 
-  it("hides and refuses to delete another user's run", () => {
-    const runId = recordRun({
+  it("hides and refuses to delete another user's run", async () => {
+    const runId = await recordRun({
       userId: "user-a",
       kind: "chat",
       modelRef: "pollinations::openai-fast",
@@ -79,16 +74,16 @@ describe("test history authorization and metadata", () => {
       accessType: "limited-free",
     });
 
-    expect(getRun("user-b", runId)).toBeUndefined();
-    expect(listRuns("user-b")).toEqual([]);
+    expect(await getRun("user-b", runId)).toBeUndefined();
+    expect(await listRuns("user-b")).toEqual([]);
 
-    const denied = deleteRun("user-b", runId);
+    const denied = await deleteRun("user-b", runId);
     expect(denied).toEqual({ deleted: false, imagePath: null });
-    expect(getRun("user-a", runId)).toBeDefined();
+    expect(await getRun("user-a", runId)).toBeDefined();
   });
 
-  it("deletes only the current user's run and returns its image path", () => {
-    const runId = recordRun({
+  it("deletes only the current user's run and returns its image path", async () => {
+    const runId = await recordRun({
       userId: "user-a",
       kind: "image",
       modelRef: "pollinations::flux",
@@ -102,13 +97,13 @@ describe("test history authorization and metadata", () => {
       imageHeight: 512,
     });
 
-    expect(deleteRun("user-a", runId)).toEqual({ deleted: true, imagePath: "file.jpg" });
-    expect(getRun("user-a", runId)).toBeUndefined();
+    expect(await deleteRun("user-a", runId)).toEqual({ deleted: true, imagePath: "file.jpg" });
+    expect(await getRun("user-a", runId)).toBeUndefined();
   });
 
-  it("scopes counts and clearing to the requesting user", () => {
-    const beforeB = countRuns("user-b");
-    recordRun({
+  it("scopes counts and clearing to the requesting user", async () => {
+    const beforeB = await countRuns("user-b");
+    await recordRun({
       userId: "user-b",
       kind: "chat",
       modelRef: "pollinations::openai-fast",
@@ -120,11 +115,11 @@ describe("test history authorization and metadata", () => {
       errorMessage: "slow down",
       accessType: "limited-free",
     });
-    expect(countRuns("user-b")).toBe(beforeB + 1);
+    expect(await countRuns("user-b")).toBe(beforeB + 1);
 
-    const clearedA = clearHistory("user-a");
+    const clearedA = await clearHistory("user-a");
     expect(clearedA).toBeGreaterThan(0);
-    expect(listRuns("user-a")).toEqual([]);
-    expect(countRuns("user-b")).toBe(beforeB + 1);
+    expect(await listRuns("user-a")).toEqual([]);
+    expect(await countRuns("user-b")).toBe(beforeB + 1);
   });
 });

@@ -13,27 +13,13 @@ export type VisitorIdentity = {
   isAnonymous: boolean;
 };
 
-/**
- * A reserved unit of provider work. The allowance is charged only when the
- * provider call actually succeeds; `release()` is safe to call after any
- * failure and never reduces the successful-generation counter.
- */
 export type GenerationReservation = VisitorIdentity & {
   usage: DailyUsage;
   requestIds: string[];
-  /** Commit successful work. With `count`, only that many reservations count. */
-  commit(count?: number): DailyUsage;
-  release(): void;
+  commit(count?: number): Promise<DailyUsage>;
+  release(): Promise<void>;
 };
 
-/**
- * Resolve the visitor's stable id for usage accounting.
- *
- * Signed-in and already-cookied anonymous visitors keep their existing id.
- * A brand-new visitor gets an anonymous session here (a Route Handler may set
- * cookies), so the same browser keeps its counter across refreshes instead of
- * receiving a fresh allowance on every request.
- */
 export async function resolveVisitorIdentity(): Promise<VisitorIdentity> {
   const user = await getCurrentUser();
   if (user) {
@@ -48,20 +34,14 @@ function requestIdsFor(requestId: string | null, count: number): string[] {
   return Array.from({ length: count }, (_, index) => `${base}:${index + 1}`);
 }
 
-/**
- * Atomically reserve capacity for one or more provider calls. A duplicate
- * idempotency ID or an exhausted allowance throws an `ApiError` carrying the
- * current `dailyUsage`, so the client can render the exact counter without a
- * second request.
- */
-export function reserveGeneration(input: {
+export async function reserveGeneration(input: {
   userId: string;
   requestId: string | null;
   count?: number;
   now?: number;
-}): GenerationReservation {
+}): Promise<GenerationReservation> {
   const count = Math.max(1, Math.trunc(input.count ?? 1));
-  const reservation = reserveDailyMessages({
+  const reservation = await reserveDailyMessages({
     userId: input.userId,
     requestIds: requestIdsFor(input.requestId, count),
     now: input.now,
@@ -98,40 +78,36 @@ export function reserveGeneration(input: {
     isAnonymous: false,
     usage: reservation.usage,
     requestIds: reservation.requestIds,
-    commit: (count?: number) => {
+    commit: async (commitCount?: number) => {
       const billed = reservation.requestIds.slice(
         0,
-        Math.max(0, Math.min(reservation.requestIds.length, Math.trunc(count ?? reservation.requestIds.length))),
+        Math.max(0, Math.min(reservation.requestIds.length, Math.trunc(commitCount ?? reservation.requestIds.length))),
       );
-      const usage = commitDailyMessages({
+      const usage = await commitDailyMessages({
         userId: input.userId,
         requestIds: billed,
         now: input.now,
       });
       const unbilled = reservation.requestIds.filter((id) => !billed.includes(id));
       if (unbilled.length > 0) {
-        releaseDailyMessages({ userId: input.userId, requestIds: unbilled });
+        await releaseDailyMessages({ userId: input.userId, requestIds: unbilled });
       }
       return usage;
     },
-    release: () =>
-      releaseDailyMessages({
+    release: async () =>
+      await releaseDailyMessages({
         userId: input.userId,
         requestIds: reservation.requestIds,
       }),
   };
 }
 
-/**
- * Resolve the visitor and reserve capacity. Call this only after request
- * validation and model resolution, immediately before the provider request.
- */
 export async function beginGeneration(
   request: Request,
   options: { count?: number } = {},
 ): Promise<GenerationReservation> {
   const identity = await resolveVisitorIdentity();
-  const reservation = reserveGeneration({
+  const reservation = await reserveGeneration({
     userId: identity.userId,
     requestId: readRequestId(request),
     count: options.count,

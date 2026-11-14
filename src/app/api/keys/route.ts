@@ -29,7 +29,7 @@ export async function GET() {
     const user = await getCurrentUser();
     const userId = user?.id ?? (await getAnonymousUserId());
     return NextResponse.json({
-      credentials: userId ? listProviderCredentials(userId) : [],
+      credentials: userId ? await listProviderCredentials(userId) : [],
     });
   } catch (error) {
     return jsonError(error);
@@ -66,14 +66,14 @@ export async function POST(request: Request) {
     // and report only a masked hint. Verification happens on explicit request.
     const userId = user?.id ?? (await getOrCreateAnonymousUserId());
     enforceRateLimit(`key-save:${userId}`, 10, 60_000);
-    saveProviderCredential(userId, provider.id, body.apiKey, {
+    await saveProviderCredential(userId, provider.id, body.apiKey, {
       verified: false,
       models: [],
       error: null,
       keyHint: maskSecret(body.apiKey),
     });
-    clearModelTestResults(userId, provider.id);
-    const saved = getProviderCredentialRow(userId, provider.id);
+    await clearModelTestResults(userId, provider.id);
+    const saved = await getProviderCredentialRow(userId, provider.id);
     return NextResponse.json({
       ok: true,
       providerId: provider.id,

@@ -1028,14 +1028,14 @@ function isDiscoveryProviderId(id: string): id is DiscoveryProviderId {
  * Read the visitor's own verified provider keys for authenticated discovery.
  * Keys are decrypted in server memory only and never leave this module.
  */
-function verifiedDiscoveryKeys(
+async function verifiedDiscoveryKeys(
   userId: string,
-): Partial<Record<DiscoveryProviderId, string>> {
+): Promise<Partial<Record<DiscoveryProviderId, string>>> {
   const keys: Partial<Record<DiscoveryProviderId, string>> = {};
-  for (const credential of listProviderCredentials(userId)) {
+  for (const credential of await listProviderCredentials(userId)) {
     if (!credential.verified) continue;
     if (!isDiscoveryProviderId(credential.providerId)) continue;
-    const row = getProviderCredentialRow(userId, credential.providerId);
+    const row = await getProviderCredentialRow(userId, credential.providerId);
     if (!row) continue;
     try {
       keys[credential.providerId] = decryptProviderKey(row);
@@ -1054,7 +1054,7 @@ export async function discoverModelsForUser(
   // OpenRouter's free-model list is public metadata, so the catalog is useful
   // before a visitor has a session. Providers that require a key are only
   // queried when the visitor already has a verified credential.
-  const keys = userId ? verifiedDiscoveryKeys(userId) : {};
+  const keys = userId ? await verifiedDiscoveryKeys(userId) : {};
   const outcomes = await discoverAllProviders(keys, options);
   return outcomes.flatMap((outcome) => outcome.models);
 }
@@ -1065,7 +1065,7 @@ export async function getDiscoveryReport(
 ) {
   // OpenRouter's listing is public; keyed providers are skipped without keys.
   if (!userId) return discoverAllProviders({}, options);
-  return discoverAllProviders(verifiedDiscoveryKeys(userId), options);
+  return discoverAllProviders(await verifiedDiscoveryKeys(userId), options);
 }
 
 export async function findDiscoveredModel(
@@ -1075,7 +1075,7 @@ export async function findDiscoveredModel(
   if (!userId) return undefined;
   const providerId = ref.split("::")[0] ?? "";
   if (!isDiscoveryProviderId(providerId)) return undefined;
-  const credential = getProviderCredentialRow(userId, providerId);
+  const credential = await getProviderCredentialRow(userId, providerId);
   if (!credential || credential.verified !== 1) return undefined;
   let apiKey: string;
   try {
@@ -1097,7 +1097,7 @@ export async function getRuntimeCatalog(userId: string | null): Promise<RuntimeM
   }
 
   const credentials = new Map<string, CredentialStatus>();
-  for (const credential of listProviderCredentials(userId)) {
+  for (const credential of await listProviderCredentials(userId)) {
     credentials.set(credential.providerId, {
       verified: credential.verified,
       models: credential.verifiedModels,
@@ -1105,7 +1105,7 @@ export async function getRuntimeCatalog(userId: string | null): Promise<RuntimeM
   }
 
   const discovered = await discoverModelsForUser(userId);
-  const testResults = listModelTestResults(userId);
+  const testResults = await listModelTestResults(userId);
   if (isAnonymousUserId(userId)) {
     // A visitor session may use its own verified BYOK credentials and custom
     // endpoints, but keyless models and server-local Ollama stay governed by
@@ -1229,7 +1229,7 @@ export async function getPlaygroundModels(
   playground: PlaygroundId,
 ): Promise<SelectableModel[]> {
   const runtime = await getRuntimeCatalog(userId);
-  const custom = userId ? listVerifiedCustomModels(userId) : [];
+  const custom = userId ? await listVerifiedCustomModels(userId) : [];
   return selectPlaygroundModels(runtime, playground, custom);
 }
 
@@ -1242,7 +1242,7 @@ export async function getSelectableModels(userId: string | null): Promise<Select
     )
     .map<SelectableModel>(toSelectableModel);
 
-  const custom = (userId ? listVerifiedCustomModels(userId) : []).map<SelectableModel>(
+  const custom = (userId ? await listVerifiedCustomModels(userId) : []).map<SelectableModel>(
     customToSelectableModel,
   );
 
@@ -1301,7 +1301,7 @@ export async function resolveModelTarget(
 
   if (ref.startsWith("custom::")) {
     const id = ref.slice("custom::".length);
-    const row = getCustomModelRow(userId, id);
+    const row = await getCustomModelRow(userId, id);
     if (!row) {
       throw new ProviderError("config", "Custom model not found for this session or account.");
     }
@@ -1318,7 +1318,7 @@ export async function resolveModelTarget(
       modelId: row.model_id,
       modelName: row.name,
       baseUrl: row.base_url,
-      apiKey: decryptCustomKey(row),
+      apiKey: await decryptCustomKey(row),
       kind: "custom",
       customId: row.id,
       paid: false,
@@ -1374,7 +1374,7 @@ export async function resolveModelTarget(
     const refProvider = ref.split("::")[0] ?? "";
     if (isDiscoveryProviderId(refProvider)) {
       const provider = getProvider(refProvider);
-      const credential = getProviderCredentialRow(userId, refProvider);
+      const credential = await getProviderCredentialRow(userId, refProvider);
       if (!credential || credential.verified !== 1) {
         throw new ProviderError(
           "config",
@@ -1442,7 +1442,7 @@ export async function resolveModelTarget(
     };
   }
 
-  const credential = getProviderCredentialRow(userId, provider.id);
+  const credential = await getProviderCredentialRow(userId, provider.id);
   if (!credential || credential.verified !== 1) {
     throw new ProviderError(
       "config",

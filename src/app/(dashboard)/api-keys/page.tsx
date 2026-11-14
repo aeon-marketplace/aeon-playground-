@@ -17,7 +17,7 @@ export default async function ApiKeysPage() {
 
   const env = getEnv();
   const providers = PROVIDERS.filter((provider) => provider.requiresKey);
-  const credentials = userId ? listProviderCredentials(userId) : [];
+  const credentials = userId ? await listProviderCredentials(userId) : [];
 
   return (
     <div className="space-y-6">
